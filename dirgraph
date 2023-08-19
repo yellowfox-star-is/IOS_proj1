@@ -1,0 +1,219 @@
+#! /bin/sh
+
+POSIXLY_CORRECT=yes
+
+#author: Vaclav Sysel
+#VUT FIT second semester bachelor
+#IOS
+
+OLD_IFS=$IFS
+IFS=$(printf "\n\b")
+
+#recursive function for searchin info
+search () {	
+	for file in $( ls --hide="$ignore" "$1" ) #shellcheck shouts that this is dangerous... well I found no other way
+	do
+		if [ "$scriptstatus" = "0" ]
+		then
+		  	if [ -d "$1/$file" ]
+			then
+				dirnum=$((dirnum + 1))
+				search "$1/$file"
+			elif [ -f "$1/$file" ]
+			then
+				filenum=$((filenum + 1))
+
+				local a
+				a=$(wc -c "$1/$file" | cut -f1 -d' ')
+
+				#checking if wc could count the file, if $a is not a number, the equation will fail which is considered a false
+				#with any number this equation is obviously true
+				if [ "$a" -eq "$a" ]
+				then
+	
+					#ladder for sorting file sizes
+					if [ "$a" -lt "100" ] ; then
+						_100B=$((_100B + 1))
+					elif [ "$a" -lt "1024" ] ; then
+						_1KiB=$((_1KiB + 1))
+					elif [ "$a" -lt "10240" ] ; then
+						_10KiB=$((_10KiB + 1))
+					elif [ "$a" -lt "102400" ] ; then
+						_100KiB=$((_100KiB + 1))
+					elif [ "$a" -lt "1048576" ] ; then
+						_1MiB=$((_1MiB + 1))
+					elif [ "$a" -lt "10485760" ] ; then
+						_10MiB=$((_10MiB + 1))
+					elif [ "$a" -lt "104857600" ] ; then
+						_100MiB=$((_100MiB + 1))
+					elif [ "$a" -lt "1073742000" ] ; then
+						_1GiB=$((_1GiB + 1))
+					else
+						unlimited=$((unlimited + 1))
+				fi
+
+	else
+		#when scriptstatus is set to any other than 0 the whole script stopts to count and only thing the writes are command errors and following echo
+		scriptstatus="1"
+		echo "Unable to get information from file: $1/$file"
+		fi
+		fi
+	fi
+	done
+}
+
+#function which normalizes the graph so it will always fit the screen
+Normalize(){
+	local size=0
+	if [ -t 1 ] ; then
+		size=$(($(tput cols) - 13))
+	else
+		size=$((79))
+	fi
+
+	if [ "$_100B" -gt $size ] || [ "$_1KiB" -gt $size  ] || [ "$_10KiB" -gt $size ] || [ "$_100KiB" -gt $size ] || [ "$_1MiB" -gt $size ] || [ "$_10MiB" -gt $size ] || [ "$_100MiB" -gt $size ] || [ "$_1GiB" -gt $size ] || [ "$unlimited" -gt $size ] ; then
+
+		local max=$_100B
+		if [ "$_1KiB" -gt "$max" ]
+		then
+			max=$_1KiB
+		fi
+		if [ "$_10KiB" -gt "$max" ]
+		then
+			max=$_10KiB
+		fi
+		if [ "$_100KiB" -gt "$max" ]
+		then
+			max=$_100KiB
+		fi
+		if [ "$_1MiB" -gt "$max" ]
+		then
+			max=$_1MiB
+		fi
+		if [ "$_10MiB" -gt "$max" ]
+		then
+			max=$_10MiB
+		fi
+		if [ "$_100MiB" -gt "$max" ]
+		then
+			max=$_100MiB
+		fi
+		if [ "$_1GiB" -gt "$max" ]
+		then
+			max=$_1GiB
+		fi
+		if [ "$_1GiB" -gt "$max" ]
+		then
+			max=$_1GiB
+		fi
+		if [ "$unlimited" -gt "$max" ]
+		then
+			max=$unlimited
+		fi
+
+		local divider=$((max / size))
+
+		_100B=$((_100B / divider))
+		_1KiB=$((_1KiB / divider))
+		_10KiB=$((_10KiB / divider))
+		_100KiB=$((_100KiB / divider))
+		_1MiB=$((_1MiB / divider))
+		_10MiB=$((_10MiB / divider))
+		_100MiB=$((_100MiB / divider))
+		_1GiB=$((_1GiB / divider))
+		unlimited=$((unlimited / divider))
+fi
+
+
+}
+
+#function for drawing the graph
+#$1 is number of # that are supposed to draw
+#$2 is echo that is supposed to be printed
+PutX(){
+	printf "%s" "$2"
+	local a=$1
+
+	while [ "$a" -gt "0" ]
+	do
+		printf "#"
+		a=$((a - 1))
+	done
+
+	printf "\n"
+}
+
+#a lot of variables that keep track of information and script itself
+
+normalize=0
+ignore=""
+
+rootdirectory=
+dirnum=0
+filenum=0
+
+_100B=0
+_1KiB=0
+_10KiB=0
+_100KiB=0
+_1MiB=0
+_10MiB=0
+_100MiB=0
+_1GiB=0
+unlimited=0
+
+scriptstatus=0
+
+
+#way to solve konfiguration via flags
+while getopts ':i:n' opt
+do
+  case $opt in
+    i) ignore="$OPTARG" ;;
+    n) normalize=1 ;;
+  esac
+done
+
+shift $((OPTIND -1))
+
+#setting a correct directory, if none is set, the directory is pwd
+rootdirectory="$1"
+rootdirectory="${rootdirectory:-"$(pwd)"}" #if rdir empty, insert pwd instead
+if [ "$(echo "$rootdirectory" | head -c 1)" != "/" ]	
+then
+	rootdirectory="$(pwd)/$rootdirectory"
+fi
+
+#all bombing of files in one single command... just beautiful :D
+search "$rootdirectory"
+
+#script checks if it ended correctly or incorrectly
+if [ "$scriptstatus" = "0" ]
+then
+
+	#checks if normalize was set
+	if [ $normalize -gt "0" ]
+	then
+		Normalize
+	fi
+
+
+	#raport time!
+	echo Root directory: "$rootdirectory"
+	echo Directories: $dirnum
+	echo "All files: $filenum"
+
+	PutX $_100B "  <100 B  : "
+	PutX $_1KiB "  <1 KiB  : "
+	PutX $_10KiB "  <10 KiB : "
+	PutX $_100KiB "  <100 KiB: "
+	PutX $_1MiB "  <1 MiB  : "
+	PutX $_10MiB "  <10 MiB : "
+	PutX $_100MiB "  <100 MiB: "
+	PutX $_1GiB "  <1 GiB  : "
+	PutX $unlimited "  >=1 GiB : "
+	
+fi
+
+IFS=$OLD_IFS
+
